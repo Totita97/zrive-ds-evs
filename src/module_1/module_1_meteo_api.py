@@ -96,7 +96,7 @@ def plot_data(data, city):
 
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(f"climate_trends_{city}.png")
+    plt.savefig(f"src/module_1/images/climate_trends_{city}.png")
 
 
 def main():
