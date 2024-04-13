@@ -18,7 +18,11 @@ COORDINATES = {
 # Define the variables to fetch
 VARIABLES = "temperature_2m_mean,precipitation_sum,soil_moisture_0_to_10cm_mean"  # noqa
 MODELS = "CMCC_CM2_VHR4,FGOALS_f3_H,HiRAM_SIT_HR,MRI_AGCM3_2_S,EC_Earth3P_HR,MPI_ESM1_2_XR,NICAM16_8S"  # noqa
-VARIABLES_MODELS = [f"{variable}_{model}" for variable in VARIABLES.split(",") for model in MODELS.split(",")]  # noqa
+VARIABLES_MODELS = [
+    f"{variable}_{model}"
+    for variable in VARIABLES.split(",")
+    for model in MODELS.split(",")
+]  # noqa
 
 
 def get_data_meteo_api(city, start_year="2021-01-01", end_year="2022-12-31"):
@@ -117,71 +121,69 @@ def process_data(data):
         return None
 
 
-
 def plot_data(data, city):
-  """Plot the processed climate data for a specific city,
-  showing mean and std."""
+    """Plot the processed climate data for a specific city,
+    showing mean and std."""
 
-  num_variables = len(VARIABLES.split(","))
-  fig, axs = plt.subplots(
-      num_variables, 1, figsize=(20, num_variables * 4), sharex=True
-  )
+    num_variables = len(VARIABLES.split(","))
+    fig, axs = plt.subplots(
+        num_variables, 1, figsize=(20, num_variables * 4), sharex=True
+    )
 
-  if num_variables == 1:
-      axs = [axs]
+    if num_variables == 1:
+        axs = [axs]
 
+    # Define a list of colors to cycle through
+    colors = [
+        "blue",
+        "green",
+        "purple",
+        "orange",
+        "red",
+        "cyan",
+        "magenta",
+        "yellow",
+        "black",
+    ]
+    color_cycle = cycle(colors)
 
-  # Define a list of colors to cycle through
-  colors = [
-      "blue",
-      "green",
-      "purple",
-      "orange",
-      "red",
-      "cyan",
-      "magenta",
-      "yellow",
-      "black",
-  ]
-  color_cycle = cycle(colors)
+    lines = []
+    labels = []
 
-  lines = []
-  labels = []
-  
-  for index, variable in enumerate(VARIABLES.split(",")):
-      for key, df in data.items():
-          if key.startswith(variable):
-            color = next(color_cycle)
-            (line_mean,) = axs[index].plot(
-                df.index, df["mean"], label=f"{key} (mean)", color=color
-            )
+    for index, variable in enumerate(VARIABLES.split(",")):
+        for key, df in data.items():
+            if key.startswith(variable):
+                color = next(color_cycle)
+                (line_mean,) = axs[index].plot(
+                    df.index, df["mean"], label=f"{key} (mean)", color=color
+                )
 
-            fill_std = axs[index].fill_between(
-                df.index,
-                df["mean"] - df["std"],
-                df["mean"] + df["std"],
-                color=color,
-                alpha=0.1,
-                label=f"{variable} (std deviation)",
-            )
-            axs[index].set_ylabel(f"{variable} units")
+                fill_std = axs[index].fill_between(
+                    df.index,
+                    df["mean"] - df["std"],
+                    df["mean"] + df["std"],
+                    color=color,
+                    alpha=0.1,
+                    label=f"{variable} (std deviation)",
+                )
+                axs[index].set_ylabel(f"{variable} units")
 
-            # Add the line and fill objects to the legend list
-            lines.append(line_mean)
-            lines.append(fill_std)
-            
-            labels.append(f"{key} (mean)")
-            labels.append(f"{key} (std deviation)")
+                # Add the line and fill objects to the legend list
+                lines.append(line_mean)
+                lines.append(fill_std)
 
-  plt.setp(axs[-1].xaxis.get_majorticklabels(), rotation=45)
-  plt.xlabel("Date", loc="left")
-  fig.suptitle(f"Climate Trends in {city}", fontsize=16)
-  plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+                labels.append(f"{key} (mean)")
+                labels.append(f"{key} (std deviation)")
 
-  # Create a unified legend for all subplots at the bottom of the figure
-  fig.legend(lines, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.01))
+    plt.setp(axs[-1].xaxis.get_majorticklabels(), rotation=45)
+    plt.xlabel("Date", loc="left")
+    fig.suptitle(f"Climate Trends in {city}", fontsize=16)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-  plt.savefig(f"climate_trends_{city}.png")
+    # Create a unified legend for all subplots at the bottom of the figure
+    fig.legend(lines, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.01))
+
+    plt.savefig(f"climate_trends_{city}.png")
 
 
 def main():
