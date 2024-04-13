@@ -101,17 +101,38 @@ def process_data(data):
         timestamps = data.pop("time")
         per_variable_dfs = {}
 
-        for variable in data:
-            df = pd.DataFrame(data[variable], index=timestamps, columns=[variable])
-            df.index = pd.to_datetime(df.index)
-            # Group data by date and calculate mean and standard deviation
-            new_df = df.groupby(df.index.date)[variable].agg(["mean", "std"])
-            new_df.columns = ["mean", "std"]
-            new_df.index = pd.to_datetime(new_df.index)
-            new_df["mean"] = new_df["mean"].round(4)
-            new_df["std"] = new_df["std"].round(4)
-            new_df = new_df.fillna(0)
-            per_variable_dfs[variable] = new_df
+        for variable in VARIABLES.split(","):
+            per_variable_dfs[variable] = pd.DataFrame()
+
+        for index, timestamp in enumerate(timestamps):
+            v_datapoints = {}
+            for variable in VARIABLES.split(","):
+                v_datapoints[variable] = []
+                for key, values in data.items():
+                    if key.startswith(variable):
+                        value = values[index]
+                        if (
+                            value is not None
+                        ):  # Check if the value is not None before appending
+                            v_datapoints[variable].append(value)
+                        else:
+                            v_datapoints[variable].append(0)
+
+            for variable in v_datapoints:
+                if v_datapoints[
+                    variable
+                ]:  # Check if there are any data points to calculate avg and std
+                    avg = sum(v_datapoints[variable]) / len(v_datapoints[variable])
+                    std = (
+                        sum([(x - avg) ** 2 for x in v_datapoints[variable]])
+                        / len(v_datapoints[variable])
+                    ) ** 0.5  # Standard deviation
+                    new_row = pd.DataFrame(
+                        [{"timestamp": timestamp, "mean": avg, "std": std}]
+                    )
+                    per_variable_dfs[variable] = pd.concat(
+                        [per_variable_dfs[variable], new_row], ignore_index=True
+                    )
 
         return per_variable_dfs
 
