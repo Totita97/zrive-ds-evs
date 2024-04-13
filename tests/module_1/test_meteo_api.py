@@ -19,6 +19,21 @@ class TestValidateResponseSchema(unittest.TestCase):
         with self.assertRaises(Exception):
             validate_response_schema(data)
 
+    def test_validate_response_schema_missing_daily(self):
+        data = {}
+        with self.assertRaises(Exception):
+            validate_response_schema(data)
+
+    def test_validate_response_schema_missing_time(self):
+        data = {"daily": {"temperature_2m_mean": [10, 20]}}
+        with self.assertRaises(Exception):
+            validate_response_schema(data)
+
+    def test_validate_response_schema_missing_variable(self):
+        data = {"daily": {"time": ["2021-01-01", "2021-01-02"]}}
+        with self.assertRaises(Exception):
+            validate_response_schema(data)
+
 
 class TestProcessData(unittest.TestCase):
     def test_process_data(self):
@@ -41,6 +56,4 @@ class TestProcessData(unittest.TestCase):
         temperature_df = processed_data["temperature_2m_mean"]
         self.assertTrue(not temperature_df.empty)
         self.assertEqual(list(temperature_df["mean"]), [10, 20])
-        self.assertEqual(
-            list(temperature_df["std"]), [0, 0]
-        )
+        self.assertEqual(list(temperature_df["std"]), [0, 0])
