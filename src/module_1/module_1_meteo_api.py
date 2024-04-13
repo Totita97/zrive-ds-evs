@@ -1,13 +1,14 @@
+# Import the required libraries
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
+from itertools import cycle
 
-# Path: climate_api.py
+# Base URL for accessing the climate data API
 # API_URL = "https://climate-api.open-meteo.com/v1/climate?"
 API_URL = "http://127.0.0.1:5000/api/climate?"
 
-
-# Set the coordinates for the cities
+# Dictionary to store geographic coordinates for specific cities
 COORDINATES = {
     "Madrid": {"latitude": 40.416775, "longitude": -3.703790},
     "London": {"latitude": 51.507351, "longitude": -0.127758},
@@ -21,6 +22,7 @@ MODELS = "CMCC_CM2_VHR4,FGOALS_f3_H,HiRAM_SIT_HR,MRI_AGCM3_2_S,EC_Earth3P_HR,MPI
 
 def get_data_meteo_api(city, start_year="1950-01-01", end_year="2050-12-31"):
     """Fetch climate data for a specific city within a given timeframe."""
+    # Parameters for the API request
     params = {
         "latitude": COORDINATES[city]["latitude"],
         "longitude": COORDINATES[city]["longitude"],
@@ -30,89 +32,165 @@ def get_data_meteo_api(city, start_year="1950-01-01", end_year="2050-12-31"):
         "daily": VARIABLES,
     }
 
-    # TODO: Add rate limits and proper error handling --> Try/Except
-    # TODO: Add schema validation for the response
+    try:
+        # Send the HTTP GET request to the API with the specified parameters
+        response = requests.get(API_URL, params=params)
+        # Raise an exception for response errors
+        response.raise_for_status()
 
-    response = requests.get(API_URL, params=params)
-    if response.status_code == 200:
         data = response.json()
-        if "daily" in data:
+        print(data)
+        try:
+            validate_response_schema(data)
             return data["daily"]
-        else:
-            print("Daily data not found in response.")
+        except Exception as e:
+            print(f"Error validating response schema: {e}")
             return None
-    elif response.status_code == 429:
-        print("Too many requests. Please wait a bit before trying again.")
+
+    except requests.exceptions.HTTPError as e:
+        # Handle exceptions for HTTP errors like rate limits
+        if response.status_code == 429:
+            print("Too many requests. Please wait a bit before trying again.")
+        else:
+            print(f"HTTP Error: {e}")
         return None
-    else:
-        print("Failed to fetch or parse data.")
+    except requests.exceptions.RequestException as e:
+        # Handle other request-related errors
+        print(f"Request failed: {e}")
         return None
+    except ValueError as e:
+        # Handle JSON decoding errors
+        print(f"Error decoding JSON: {e}")
+        return None
+    except Exception as e:
+        # Handle all other exceptions
+        print(f"An unexpected error occurred: {e}")
+        return None
+
+
+def validate_response_schema(data):
+    if "daily" not in data:
+        raise Exception("Daily data not found in response.")
+
+    for variable in VARIABLES.split(","):
+        if variable not in data["daily"]:
+            raise Exception(f"Variable {variable} not found in response.")
+
+    if "time" not in data["daily"]:
+        raise Exception("Time data not found in response.")
+
+    if len(data["daily"]["time"]) == 0:
+        raise Exception("No time data found in response.")
+
+    for variable in VARIABLES.split(","):
+        if len(data["daily"][variable]) != len(data["daily"]["time"]):
+            raise Exception(f"Data length mismatch for variable {variable}.")
 
 
 def process_data(data):
-    # TODO: Add unit tests
     """Process the data to compute average and dispersion."""
+    # Check if data is empty
     if not data:
         print("No data received.")
         return None
     try:
         timestamps = data.pop("time")
-
         per_variable_dfs = {}
+
         for variable in data:
-            df = pd.DataFrame(
-                data[variable], index=timestamps, columns=[variable]
-            )  # noqa
+            df = pd.DataFrame(data[variable], index=timestamps, columns=[variable])
             df.index = pd.to_datetime(df.index)
+            # Group data by date and calculate mean and standard deviation
             new_df = df.groupby(df.index.date)[variable].agg(["mean", "std"])
             new_df.columns = ["mean", "std"]
             new_df.index = pd.to_datetime(new_df.index)
+            new_df["mean"] = new_df["mean"].round(4)
+            new_df["std"] = new_df["std"].round(4)
             per_variable_dfs[variable] = new_df
 
         return per_variable_dfs
 
     except Exception as e:
+        # Handle exceptions during data processing
         print(f"Error creating DataFrame or computing statistics: {e}")
         return None
 
 
 def plot_data(data, city):
-    """Plot the climate data for a specific city."""
-    fig, axs = plt.subplots(len(data.keys()), figsize=(10, 6))
+    """Plot the processed climate data for a specific city,
+    showing mean and std."""
+
+    num_variables = len(data)
+    fig, axs = plt.subplots(
+        num_variables, 1, figsize=(20, num_variables * 4), sharex=True
+    )
+
+    if num_variables == 1:
+        axs = [axs]
+
+    # Define a list of colors to cycle through
+    colors = [
+        "blue",
+        "green",
+        "purple",
+        "orange",
+        "red",
+        "cyan",
+        "magenta",
+        "yellow",
+        "black",
+    ]
+    color_cycle = cycle(colors)
+
+    lines = []
+    labels = []
 
     for i, (variable, df) in enumerate(data.items()):
-        axs[i].plot(df.index.date, df["mean"], label=f"{variable} (mean)")
-        axs[i].fill_between(
+        color = next(color_cycle)
+        (line_mean,) = axs[i].plot(
+            df.index, df["mean"], label=f"{variable} (mean)", color=color
+        )
+        fill_std = axs[i].fill_between(
             df.index,
             df["mean"] - df["std"],
             df["mean"] + df["std"],
-            alpha=0.2,
-            label=f"{variable} (std)",
+            color=color,
+            alpha=0.1,
+            label=f"{variable} (std deviation)",
         )
-        axs[i].set_ylabel(variable)
-        axs[i].legend()
-        if i < len(data.keys()) - 1:
-            plt.setp(axs[i].xaxis.get_majorticklabels(), visible=False)
+        axs[i].set_ylabel(f"{variable} units")
 
-    plt.xticks(rotation=45)
-    plt.tight_layout()
+        # Add the line and fill objects to the legend list
+        lines.append(line_mean)
+        lines.append(fill_std)
+        labels.append(f"{variable} (mean)")
+        labels.append(f"{variable} (std deviation)")
+
+    plt.setp(axs[-1].xaxis.get_majorticklabels(), rotation=45)
+    plt.xlabel("Date", loc="left")
+    fig.suptitle(f"Climate Trends in {city}", fontsize=16)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # Create a unified legend for all subplots at the bottom of the figure
+    fig.legend(lines, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.01))
+
     plt.savefig(f"src/module_1/images/climate_trends_{city}.png")
 
 
 def main():
     for city in COORDINATES:
-        data = get_data_meteo_api(city)
-        if data:
-            processed_data = process_data(
-                data,
-            )
-            if processed_data is not None:
-                plot_data(processed_data, city)
+        try:
+            data = get_data_meteo_api(city)
+            if data:
+                processed_data = process_data(data)
+                if processed_data is not None:
+                    plot_data(processed_data, city)
+                else:
+                    print(f"Data processing failed for {city}.")
             else:
-                print(f"Data processing failed for {city}.")
-
-        else:
-            print(f"Failed to fetch data for {city}.")
+                print(f"No data available to process for {city}.")
+        except Exception as e:
+            print(f"An error occurred while processing data for {city}: {e}")
 
 
 if __name__ == "__main__":
