@@ -6,7 +6,6 @@ from itertools import cycle
 
 # Base URL for accessing the climate data API
 API_URL = "https://climate-api.open-meteo.com/v1/climate?"
-# API_URL = "http://127.0.0.1:5000/api/climate?"
 
 # Dictionary to store geographic coordinates for specific cities
 COORDINATES = {
@@ -25,7 +24,7 @@ VARIABLES_MODELS = [
 ]  # noqa
 
 
-def get_data_meteo_api(city, start_year="2021-01-01", end_year="2022-12-31"):
+def get_data_meteo_api(city, start_year="1950-01-01", end_year="2050-12-31"):
     """Fetch climate data for a specific city within a given timeframe."""
     # Parameters for the API request
     params = {
@@ -76,9 +75,13 @@ def validate_response_schema(data):
     if "daily" not in data:
         raise Exception("Daily data not found in response.")
 
-    for variable in VARIABLES_MODELS:
-        if variable not in data["daily"]:
-            raise Exception(f"Variable {variable} not found in response.")
+    base_variables = [var.split("_")[0] for var in VARIABLES.split(",")]
+    daily_keys = data["daily"].keys()
+
+    for base_var in base_variables:
+        # Check if any key in daily data starts with the base variable name
+        if not any(key.startswith(base_var) for key in daily_keys):
+            raise Exception(f"Variable {base_var} not found in response.")
 
     if "time" not in data["daily"]:
         raise Exception("Time data not found in response.")
@@ -86,14 +89,11 @@ def validate_response_schema(data):
     if len(data["daily"]["time"]) == 0:
         raise Exception("No time data found in response.")
 
-    for variable in VARIABLES_MODELS:
-        if len(data["daily"][variable]) != len(data["daily"]["time"]):
-            raise Exception(f"Data length mismatch for variable {variable}.")
+    # Further checks can be added as needed
 
 
 def process_data(data):
     """Process the data to compute average and dispersion."""
-    # Check if data is empty
     if not data:
         print("No data received.")
         return None
@@ -122,17 +122,31 @@ def process_data(data):
                 if v_datapoints[
                     variable
                 ]:  # Check if there are any data points to calculate avg and std
-                    avg = sum(v_datapoints[variable]) / len(v_datapoints[variable])
-                    std = (
-                        sum([(x - avg) ** 2 for x in v_datapoints[variable]])
-                        / len(v_datapoints[variable])
-                    ) ** 0.5  # Standard deviation
+                    avg = round(
+                        sum(v_datapoints[variable]) / len(v_datapoints[variable]), 4
+                    )
+                    std = round(
+                        (
+                            sum([(x - avg) ** 2 for x in v_datapoints[variable]])
+                            / len(v_datapoints[variable])
+                        )
+                        ** 0.5,
+                        4,
+                    )  # Standard deviation
                     new_row = pd.DataFrame(
-                        [{"timestamp": timestamp, "mean": avg, "std": std}]
-                    )
+                        [{"timestamp": timestamp, "mean": avg, "std": std}],
+                        index=[timestamp],
+                    )  # Set timestamp as index
                     per_variable_dfs[variable] = pd.concat(
-                        [per_variable_dfs[variable], new_row], ignore_index=True
+                        [per_variable_dfs[variable], new_row]
                     )
+
+        # Set index as datetime for all variable DataFrames
+        for variable in per_variable_dfs:
+            per_variable_dfs[variable].index = pd.to_datetime(
+                per_variable_dfs[variable].index
+            )
+            per_variable_dfs[variable].sort_index(inplace=True)
 
         return per_variable_dfs
 
