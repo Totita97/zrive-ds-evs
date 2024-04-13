@@ -1,4 +1,3 @@
-# Import the required libraries
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -26,7 +25,6 @@ VARIABLES_MODELS = [
 
 def get_data_meteo_api(city, start_year="1950-01-01", end_year="2050-12-31"):
     """Fetch climate data for a specific city within a given timeframe."""
-    # Parameters for the API request
     params = {
         "latitude": COORDINATES[city]["latitude"],
         "longitude": COORDINATES[city]["longitude"],
@@ -37,9 +35,7 @@ def get_data_meteo_api(city, start_year="1950-01-01", end_year="2050-12-31"):
     }
 
     try:
-        # Send the HTTP GET request to the API with the specified parameters
         response = requests.get(API_URL, params=params)
-        # Raise an exception for response errors
         response.raise_for_status()
 
         data = response.json()
@@ -79,7 +75,6 @@ def validate_response_schema(data):
     daily_keys = data["daily"].keys()
 
     for base_var in base_variables:
-        # Check if any key in daily data starts with the base variable name
         if not any(key.startswith(base_var) for key in daily_keys):
             raise Exception(f"Variable {base_var} not found in response.")
 
@@ -88,8 +83,6 @@ def validate_response_schema(data):
 
     if len(data["daily"]["time"]) == 0:
         raise Exception("No time data found in response.")
-
-    # Further checks can be added as needed
 
 
 def process_data(data):
@@ -113,7 +106,7 @@ def process_data(data):
                         value = values[index]
                         if (
                             value is not None
-                        ):  # Check if the value is not None before appending
+                        ):
                             v_datapoints[variable].append(value)
                         else:
                             v_datapoints[variable].append(0)
@@ -121,7 +114,7 @@ def process_data(data):
             for variable in v_datapoints:
                 if v_datapoints[
                     variable
-                ]:  # Check if there are any data points to calculate avg and std
+                ]:
                     avg = round(
                         sum(v_datapoints[variable]) / len(v_datapoints[variable]), 4
                     )
@@ -132,16 +125,15 @@ def process_data(data):
                         )
                         ** 0.5,
                         4,
-                    )  # Standard deviation
+                    )
                     new_row = pd.DataFrame(
                         [{"timestamp": timestamp, "mean": avg, "std": std}],
                         index=[timestamp],
-                    )  # Set timestamp as index
+                    )
                     per_variable_dfs[variable] = pd.concat(
                         [per_variable_dfs[variable], new_row]
                     )
 
-        # Set index as datetime for all variable DataFrames
         for variable in per_variable_dfs:
             per_variable_dfs[variable].index = pd.to_datetime(
                 per_variable_dfs[variable].index
@@ -168,7 +160,6 @@ def plot_data(data, city):
     if num_variables == 1:
         axs = [axs]
 
-    # Define a list of colors to cycle through
     colors = [
         "blue",
         "green",
@@ -203,7 +194,6 @@ def plot_data(data, city):
                 )
                 axs[index].set_ylabel(f"{variable} units")
 
-                # Add the line and fill objects to the legend list
                 lines.append(line_mean)
                 lines.append(fill_std)
 
@@ -215,7 +205,6 @@ def plot_data(data, city):
     fig.suptitle(f"Climate Trends in {city}", fontsize=16)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-    # Create a unified legend for all subplots at the bottom of the figure
     fig.legend(lines, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.01))
 
     plt.savefig(f"climate_trends_{city}.png")

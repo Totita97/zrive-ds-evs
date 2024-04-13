@@ -37,7 +37,6 @@ class TestValidateResponseSchema(unittest.TestCase):
 
 class TestProcessData(unittest.TestCase):
     def test_process_data(self):
-        # Sample data mimicking the API response
         data = {
             "time": ["2021-01-01", "2021-01-02"],
             "temperature_2m_mean": [10, 20],
@@ -46,14 +45,22 @@ class TestProcessData(unittest.TestCase):
         }
         processed_data = process_data(data)
 
-        # Asserting the structure and content of processed_data
         self.assertIsInstance(processed_data, dict)
         self.assertIn("temperature_2m_mean", processed_data)
         self.assertIn("precipitation_sum", processed_data)
         self.assertIn("soil_moisture_0_to_10cm_mean", processed_data)
 
-        # Checking one of the DataFrame outputs
         temperature_df = processed_data["temperature_2m_mean"]
         self.assertTrue(not temperature_df.empty)
         self.assertEqual(list(temperature_df["mean"]), [10, 20])
         self.assertEqual(list(temperature_df["std"]), [0, 0])
+
+        precipitation_df = processed_data["precipitation_sum"]
+        self.assertTrue(not precipitation_df.empty)
+        self.assertEqual(list(precipitation_df["mean"]), [5, 10])
+        self.assertEqual(list(precipitation_df["std"]), [0, 0])
+
+        soil_moisture_df = processed_data["soil_moisture_0_to_10cm_mean"]
+        self.assertTrue(not soil_moisture_df.empty)
+        self.assertEqual(list(soil_moisture_df["mean"]), [0.5, 0.6])
+        self.assertEqual(list(soil_moisture_df["std"]), [0, 0])
