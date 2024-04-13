@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from itertools import cycle
 
 # Base URL for accessing the climate data API
-# API_URL = "https://climate-api.open-meteo.com/v1/climate?"
-API_URL = "http://127.0.0.1:5000/api/climate?"
+API_URL = "https://climate-api.open-meteo.com/v1/climate?"
+# API_URL = "http://127.0.0.1:5000/api/climate?"
 
 # Dictionary to store geographic coordinates for specific cities
 COORDINATES = {
@@ -18,9 +18,10 @@ COORDINATES = {
 # Define the variables to fetch
 VARIABLES = "temperature_2m_mean,precipitation_sum,soil_moisture_0_to_10cm_mean"  # noqa
 MODELS = "CMCC_CM2_VHR4,FGOALS_f3_H,HiRAM_SIT_HR,MRI_AGCM3_2_S,EC_Earth3P_HR,MPI_ESM1_2_XR,NICAM16_8S"  # noqa
+VARIABLES_MODELS = [f"{variable}_{model}" for variable in VARIABLES.split(",") for model in MODELS.split(",")]  # noqa
 
 
-def get_data_meteo_api(city, start_year="1950-01-01", end_year="2050-12-31"):
+def get_data_meteo_api(city, start_year="2021-01-01", end_year="2022-12-31"):
     """Fetch climate data for a specific city within a given timeframe."""
     # Parameters for the API request
     params = {
@@ -39,7 +40,6 @@ def get_data_meteo_api(city, start_year="1950-01-01", end_year="2050-12-31"):
         response.raise_for_status()
 
         data = response.json()
-        print(data)
         try:
             validate_response_schema(data)
             return data["daily"]
@@ -72,7 +72,7 @@ def validate_response_schema(data):
     if "daily" not in data:
         raise Exception("Daily data not found in response.")
 
-    for variable in VARIABLES.split(","):
+    for variable in VARIABLES_MODELS:
         if variable not in data["daily"]:
             raise Exception(f"Variable {variable} not found in response.")
 
@@ -82,7 +82,7 @@ def validate_response_schema(data):
     if len(data["daily"]["time"]) == 0:
         raise Exception("No time data found in response.")
 
-    for variable in VARIABLES.split(","):
+    for variable in VARIABLES_MODELS:
         if len(data["daily"][variable]) != len(data["daily"]["time"]):
             raise Exception(f"Data length mismatch for variable {variable}.")
 
@@ -106,6 +106,7 @@ def process_data(data):
             new_df.index = pd.to_datetime(new_df.index)
             new_df["mean"] = new_df["mean"].round(4)
             new_df["std"] = new_df["std"].round(4)
+            new_df = new_df.fillna(0)
             per_variable_dfs[variable] = new_df
 
         return per_variable_dfs
@@ -116,65 +117,71 @@ def process_data(data):
         return None
 
 
+
 def plot_data(data, city):
-    """Plot the processed climate data for a specific city,
-    showing mean and std."""
+  """Plot the processed climate data for a specific city,
+  showing mean and std."""
 
-    num_variables = len(data)
-    fig, axs = plt.subplots(
-        num_variables, 1, figsize=(20, num_variables * 4), sharex=True
-    )
+  num_variables = len(VARIABLES.split(","))
+  fig, axs = plt.subplots(
+      num_variables, 1, figsize=(20, num_variables * 4), sharex=True
+  )
 
-    if num_variables == 1:
-        axs = [axs]
+  if num_variables == 1:
+      axs = [axs]
 
-    # Define a list of colors to cycle through
-    colors = [
-        "blue",
-        "green",
-        "purple",
-        "orange",
-        "red",
-        "cyan",
-        "magenta",
-        "yellow",
-        "black",
-    ]
-    color_cycle = cycle(colors)
 
-    lines = []
-    labels = []
+  # Define a list of colors to cycle through
+  colors = [
+      "blue",
+      "green",
+      "purple",
+      "orange",
+      "red",
+      "cyan",
+      "magenta",
+      "yellow",
+      "black",
+  ]
+  color_cycle = cycle(colors)
 
-    for i, (variable, df) in enumerate(data.items()):
-        color = next(color_cycle)
-        (line_mean,) = axs[i].plot(
-            df.index, df["mean"], label=f"{variable} (mean)", color=color
-        )
-        fill_std = axs[i].fill_between(
-            df.index,
-            df["mean"] - df["std"],
-            df["mean"] + df["std"],
-            color=color,
-            alpha=0.1,
-            label=f"{variable} (std deviation)",
-        )
-        axs[i].set_ylabel(f"{variable} units")
+  lines = []
+  labels = []
+  
+  for index, variable in enumerate(VARIABLES.split(",")):
+      for key, df in data.items():
+          if key.startswith(variable):
+            color = next(color_cycle)
+            (line_mean,) = axs[index].plot(
+                df.index, df["mean"], label=f"{key} (mean)", color=color
+            )
 
-        # Add the line and fill objects to the legend list
-        lines.append(line_mean)
-        lines.append(fill_std)
-        labels.append(f"{variable} (mean)")
-        labels.append(f"{variable} (std deviation)")
+            fill_std = axs[index].fill_between(
+                df.index,
+                df["mean"] - df["std"],
+                df["mean"] + df["std"],
+                color=color,
+                alpha=0.1,
+                label=f"{variable} (std deviation)",
+            )
+            axs[index].set_ylabel(f"{variable} units")
 
-    plt.setp(axs[-1].xaxis.get_majorticklabels(), rotation=45)
-    plt.xlabel("Date", loc="left")
-    fig.suptitle(f"Climate Trends in {city}", fontsize=16)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+            # Add the line and fill objects to the legend list
+            lines.append(line_mean)
+            lines.append(fill_std)
+            
+            labels.append(f"{key} (mean)")
+            labels.append(f"{key} (std deviation)")
 
-    # Create a unified legend for all subplots at the bottom of the figure
-    fig.legend(lines, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.01))
+  plt.setp(axs[-1].xaxis.get_majorticklabels(), rotation=45)
+  plt.xlabel("Date", loc="left")
+  fig.suptitle(f"Climate Trends in {city}", fontsize=16)
+  plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-    plt.savefig(f"src/module_1/images/climate_trends_{city}.png")
+  # Create a unified legend for all subplots at the bottom of the figure
+  fig.legend(lines, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.01))
+
+  plt.savefig(f"climate_trends_{city}.png")
 
 
 def main():
@@ -191,6 +198,7 @@ def main():
                 print(f"No data available to process for {city}.")
         except Exception as e:
             print(f"An error occurred while processing data for {city}: {e}")
+            print(e)
 
 
 if __name__ == "__main__":
