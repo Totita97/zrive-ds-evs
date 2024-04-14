@@ -53,14 +53,43 @@ class TestProcessData(unittest.TestCase):
         temperature_df = processed_data["temperature_2m_mean"]
         self.assertTrue(not temperature_df.empty)
         self.assertEqual(list(temperature_df["mean"]), [10, 20])
-        self.assertEqual(list(temperature_df["std"]), [0, 0])
+        self.assertEqual(list(temperature_df["std_deviation"]), [0, 0])
 
         precipitation_df = processed_data["precipitation_sum"]
         self.assertTrue(not precipitation_df.empty)
         self.assertEqual(list(precipitation_df["mean"]), [5, 10])
-        self.assertEqual(list(precipitation_df["std"]), [0, 0])
+        self.assertEqual(list(precipitation_df["std_deviation"]), [0, 0])
 
         soil_moisture_df = processed_data["soil_moisture_0_to_10cm_mean"]
         self.assertTrue(not soil_moisture_df.empty)
         self.assertEqual(list(soil_moisture_df["mean"]), [0.5, 0.6])
-        self.assertEqual(list(soil_moisture_df["std"]), [0, 0])
+        self.assertEqual(list(soil_moisture_df["std_deviation"]), [0, 0])
+
+
+class TestValidateResponseSchemaEdgeCases(unittest.TestCase):
+    def test_incorrect_data_types(self):
+        data = {
+            "daily": {
+                "time": [20210101, 20210102],
+                "temperature_2m_mean": ["10", "20"],
+                "precipitation_sum": [None, 10],
+            }
+        }
+        with self.assertRaises(Exception):
+            validate_response_schema(data)
+
+
+class TestProcessDataEdgeCases(unittest.TestCase):
+    def test_missing_data(self):
+        data = {}
+        processed_data = process_data(data)
+        self.assertIsNone(processed_data)
+
+    def test_empty_lists(self):
+        data = {
+            "time": [],
+            "temperature_2m_mean": [],
+            "precipitation_sum": [],
+        }
+        processed_data = process_data(data)
+        self.assertTrue(all(df.empty for df in processed_data.values()))
